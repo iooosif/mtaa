@@ -1,5 +1,6 @@
 import Buttons from "@/components/Buttons";
 import Inputs from "@/components/Inputs";
+import { useTheme } from "@/context/ThemeContex";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import React from "react";
@@ -14,6 +15,7 @@ import {
 
 export default function Register() {
   const router = useRouter();
+  const { theme } = useTheme();
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -22,7 +24,7 @@ export default function Register() {
         style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
       >
         <ImageBackground
-          source={require("../assets/images/LoginScreenBackground.png")}
+          source={theme.colors.background}
           resizeMode="cover"
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
@@ -65,7 +67,7 @@ export default function Register() {
             <Inputs placeholder="E-mail@stuba.sk" isPassword={false} />
             <Inputs placeholder="Password" isPassword={true} />
             <Inputs placeholder="Repeat Password" isPassword={true} />
-            <Text>Toggle pre zobrazenie hesiel</Text>
+            <Text>Toggle pre zobrazenie hesiel + fix theme</Text>
             <Buttons title="Register" onPress={() => {}} />
           </View>
         </ImageBackground>

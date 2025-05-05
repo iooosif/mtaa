@@ -1,8 +1,8 @@
-import { ImageBackground, SafeAreaView, ScrollView, Switch, Text, View } from "react-native";
-import Login from "./login";
+import { ImageBackground,  Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import Buttons from "@/components/Buttons";
 import { useTheme } from "@/context/ThemeContex";
+import React from "react";
 
 export default function Index() {
   const router = useRouter();
@@ -19,11 +19,11 @@ export default function Index() {
         resizeMode="cover"
         style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
       >
-        <SafeAreaView>
+        {/* toto bol test ci funguje theme <SafeAreaView>
         <View>
           <Switch value={theme === theme} onValueChange={toggleTheme} />
         </View>
-        </SafeAreaView>
+        </SafeAreaView> */}
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={{ fontSize: 32, fontWeight: "bold", marginTop: 150 }}>
             STUFace

@@ -22,7 +22,7 @@ export default function Login() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const { theme } = useTheme(); 
+  const { theme } = useTheme();
 
   return (
     <>
@@ -77,10 +77,18 @@ export default function Login() {
               STUFace
             </Text>
             <Inputs placeholder="Username" isPassword={false}/>
-            <Inputs placeholder="Password" isPassword={true}/> 
-            <Buttons title="Login" onPress={() => {}} />
+            <Inputs placeholder="Password" isPassword={true}/>
+            <Buttons title="Login" onPress={() => {
+              router.push({
+                pathname: '/home',
+              })
+            }} />
             <Text>OR</Text>
-            <Buttons title="Register" onPress={() => {}} />
+            <Buttons title="Register" onPress={() => {
+              router.push({
+                pathname: "/register",
+              });
+            }} />
           </View>
         </ImageBackground>
       </TouchableWithoutFeedback>
@@ -89,5 +97,5 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  
+
 });
