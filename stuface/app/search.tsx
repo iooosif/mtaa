@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, ImageBackground } from 'react-native';
 import { useTheme } from '@/context/ThemeContex';
+import Inputs from '@/components/Inputs';
+import Buttons from '@/components/Buttons';
 
 export default function SearchScreen() {
   const { theme } = useTheme();
@@ -11,7 +13,13 @@ export default function SearchScreen() {
       resizeMode="cover"
       style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
     >
-      <Text style={{ color: theme.colors.text, fontSize: 24 }}>Search Screen</Text>
+      <View>
+        <Inputs placeholder="Search anything..." isPassword={false}/>
+        {/* Touchable w=opacity */}
+      </View>
+      <View>
+        <Buttons title="Search" onPress={() => {}} />
+      </View>
     </ImageBackground>
   );
 }
