@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,22 +9,89 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { useTheme } from "@/context/ThemeContex";
 import { Stack, useRouter } from "expo-router";
 import PillBox from "@/components/PillBox";
 import Buttons from "@/components/Buttons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen() {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const [username, setUsername] = useState<string | null>(null);
 
   const pills = ["Personal Info", "Settings", "Saved"];
   const routeMap: Record<string, string> = {
     "Personal Info": "personal-info",
     Settings: "settings",
     Saved: "saved",
+  };
+
+  useEffect(() => {
+    const loadUsername = async () => {
+      try {
+        const storedUsername = await AsyncStorage.getItem("username");
+        setUsername(storedUsername);
+      } catch (error) {
+        console.error("Error loading username:", error);
+      }
+    };
+
+    loadUsername();
+  }, []);
+
+  // Logout function
+  const handleLogout = async () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Clear user data from AsyncStorage
+              await AsyncStorage.removeItem("loginData");
+              await AsyncStorage.removeItem("username");
+              await AsyncStorage.removeItem("userId");
+
+              // You can add more items to clear if needed
+
+              console.log("Logged out successfully");
+
+              // Show success message
+              Alert.alert(
+                "Logged Out",
+                "You have been successfully logged out",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      // Navigate to login screen after showing the message
+                      router.replace("/");
+                    }
+                  }
+                ]
+              );
+            } catch (error) {
+              console.error("Error during logout:", error);
+              Alert.alert(
+                "Error",
+                "Failed to log out. Please try again."
+              );
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -38,7 +105,7 @@ export default function ProfileScreen() {
         <SafeAreaView style={styles.safeArea}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerText}>Username</Text>
+            <Text style={styles.headerText}>{username}</Text>
           </View>
 
           {/* Content */}
@@ -66,7 +133,7 @@ export default function ProfileScreen() {
 
           {/* Logout Button */}
           <View style={styles.logoutContainer}>
-            <Buttons title="Log Out" onPress={() => { /* logout logic */ }} />
+            <Buttons title="Log Out" onPress={handleLogout} />
           </View>
         </SafeAreaView>
       </ImageBackground>

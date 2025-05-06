@@ -14,6 +14,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import Inputs from "@/components/Inputs";
 import { useTheme } from "@/context/ThemeContex";
@@ -39,6 +40,42 @@ export default function Login() {
     } catch (e) {
       console.log(e);
     }
+  }
+
+  async function login() {
+    // first set username and password // this can later be removed now just for development
+    if(password !== "" && username !== "") {
+      // testing
+      saveLoginData({ username: username, password: password });
+      updateUsername(username);
+      return router.push({
+        pathname: "/home",
+      })
+    }
+
+    fetch('http://localhost:8080/login', {
+      method: "POST",
+      body: JSON.stringify({ username: username, password: password }),
+    })
+    .then((response) => {
+      if(response.status === 200) {
+        return response.json()
+      } else {
+        Alert.alert("Error", "Invalid username or password", [{text: "OK"}])
+      }
+    })
+    .then((data) => {
+      console.log(data);
+      saveLoginData(data)
+      updateUsername(data.username);
+      router.push({
+        pathname: "/home",
+      });
+    })
+    .catch((e) => {
+      console.log(e);
+      Alert.alert("Error", "Connection error", [{text: "OK"}])
+    })
   }
 
   return (
@@ -93,12 +130,10 @@ export default function Login() {
             >
               STUFace
             </Text>
-            <Inputs placeholder="Username" isPassword={false}/>
-            <Inputs placeholder="Password" isPassword={true}/>
+            <Inputs placeholder="Username" isPassword={false} value={username} onChangeText={setUsername}/>
+            <Inputs placeholder="Password" isPassword={true} value={password} onChangeText={setPassword}/>
             <Buttons title="Login" onPress={() => {
-              router.push({
-                pathname: '/home',
-              })
+              login();
             }} />
             <Text>OR</Text>
             <Buttons title="Register" onPress={() => {

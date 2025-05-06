@@ -215,10 +215,7 @@ export default function MessagesScreen() {
             <View style={styles.inputContainer}>
               <View style={styles.inputWrapper}>
                 <Inputs
-                {/**Have to fix the inputs */}
                   placeholder="Type a message..."
-                  value={messageText}
-                  onChangeText={setMessageText}
                   isPassword={false}
                 />
               </View>

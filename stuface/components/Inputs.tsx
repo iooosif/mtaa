@@ -5,13 +5,15 @@ import { TextInput, StyleSheet } from 'react-native';
 type inputProps = {
     placeholder: string;
     isPassword: boolean;
+    value?: string;
+    onChangeText?: (text: string) => void;
 }
 
 export default function Inputs( props: inputProps) {
   const {theme} = useTheme();
   const styles = dynamicStyles(theme)
   return (
-    <TextInput style={styles.input} secureTextEntry={props.isPassword} placeholder={props.placeholder}>
+    <TextInput style={styles.input} secureTextEntry={props.isPassword} placeholder={props.placeholder} value={props.value} onChangeText={props.onChangeText}>
     </TextInput>
   )
 }
