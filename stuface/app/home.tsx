@@ -6,7 +6,11 @@ import {
   ImageBackground,
   View,
   TouchableOpacity,
-  ScrollView,
+  StyleSheet,
+  SafeAreaView,
+  Text,
+  StatusBar,
+  Platform
 } from "react-native";
 
 export default function Home() {
@@ -59,6 +63,11 @@ export default function Home() {
         resizeMode="cover"
         style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
       >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.header}>
+            <Text style={styles.headerText}>Home</Text>
+          </View>
+          <View style={styles.topics}>
        {topics.map((topic) => (
                 <TouchableOpacity
                   key={topic.id}
@@ -68,14 +77,37 @@ export default function Home() {
                   <PillBox text={topic.name} />
                 </TouchableOpacity>
               ))}
+          </View>
+        </SafeAreaView>
       </ImageBackground>
     </>
 
   );
 }
 
-const dynamicStyles = (theme: any) => ({
+const dynamicStyles = (theme: any) => StyleSheet.create({
   pillWrapper: {
     margin: 10,
-  }
+  },
+  safeArea: {
+      flex: 1,
+      width: '100%',
+      paddingTop: StatusBar.currentHeight || 10,
+      alignItems: 'center',
+    },
+    headerText: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+    },
+    header: {
+      paddingHorizontal: 20,
+      marginBottom: 20,
+      marginTop: 10,
+      alignSelf: 'flex-start',  // Keep header on the left
+    },
+    topics: {
+      flex: 1,
+      marginTop: Platform === "iOS" ? 0: 70,
+    }
 });

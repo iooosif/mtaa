@@ -54,8 +54,8 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           >
             <Ionicons
               name={iconName}
-              size={24}
-              color={isFocused ? theme.colors.primary : "#8E8E93"}
+              size={28}
+              color={isFocused ? theme.colors.primary : theme.colors.icons}
             />
           </TouchableOpacity>
         );
@@ -86,13 +86,11 @@ const getIconName = (routeName: string, isFocused: boolean): any => {
 const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 0.5,
-    borderTopColor: "#D1D1D6",
+    backgroundColor: theme.colors.taskBar,
     justifyContent: "space-around",
     alignItems: "center",
-    height: Platform.OS === 'ios' ? 50 + insets.bottom : 60,
-    paddingBottom: Platform.OS === 'ios' ? insets.bottom : 0,
+    height: Platform.OS === 'ios' ? 50 + insets.bottom : 70,
+    paddingBottom: Platform.OS === 'ios' ? insets.bottom : 10,
     width: '100%',
     position: "absolute",
     bottom: 0,

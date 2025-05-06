@@ -12,10 +12,29 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Register() {
   const router = useRouter();
   const { theme } = useTheme();
+
+  async function saveLoginData(value: Object) {
+    try {
+      const jsonValue = JSON.stringify(value);
+      await AsyncStorage.setItem("loginData", jsonValue);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  async function updateUsername(value: string) {
+    try {
+      await AsyncStorage.setItem("username", value);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />

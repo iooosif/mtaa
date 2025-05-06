@@ -17,12 +17,29 @@ import {
 } from "react-native";
 import Inputs from "@/components/Inputs";
 import { useTheme } from "@/context/ThemeContex";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Login() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const { theme } = useTheme();
+
+  async function saveLoginData(value: Object) {
+    try {
+      const jsonValue = JSON.stringify(value);
+      await AsyncStorage.setItem("loginData", jsonValue);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+  async function updateUsername(value: string) {
+    try {
+      await AsyncStorage.setItem("username", value);
+    } catch (e) {
+      console.log(e);
+    }
+  }
 
   return (
     <>

@@ -1,6 +1,6 @@
 import { useTheme } from "@/context/ThemeContex";
 import React from "react";
-import { View, StyleSheet, TouchableHighlight, Button, Text } from "react-native";
+import { View, StyleSheet, TouchableHighlight, Text } from "react-native";
 
 type buttonProps = {
   title: string;
@@ -13,7 +13,7 @@ function Buttons(props: buttonProps) {
   return (
     <View>
       <TouchableHighlight style={styles.button} onPress={props.onPress}>
-        <Text style={{ fontSize: 16, color: theme.colors.text, textAlign: "center", padding: 10}}>{props.title}</Text>
+        <Text style={{ fontSize: 16, fontWeight:"bold", color: theme.colors.text, textAlign: "center", padding: 10}}>{props.title}</Text>
       </TouchableHighlight>
     </View>
   );
