@@ -3,7 +3,7 @@ import Inputs from "@/components/Inputs";
 import { useTheme } from "@/context/ThemeContex";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   Text,
   ImageBackground,
@@ -11,12 +11,20 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Register() {
   const router = useRouter();
   const { theme } = useTheme();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [lastname, setLastname] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   async function saveLoginData(value: Object) {
     try {
@@ -33,6 +41,33 @@ export default function Register() {
     } catch (e) {
       console.log(e);
     }
+  }
+
+  async function register() {
+    fetch("http://localhost:8080/register", {
+      method: "POST",
+      body: JSON.stringify({
+        username: name,
+        email: email,
+        password: password,
+        password2: repeatPassword,
+      })
+    })
+    .then(response => {
+      response.json();
+    })
+    .then((data: any) => {
+      console.log(data);
+      if (data.message) {
+        saveLoginData({ username: name, password: password });
+        updateUsername(name);
+        router.push({
+          pathname: "/home",
+        });
+      } else {
+        Alert.alert("Error", data.error, [{ text: "OK" }]); // or error i dont remember
+      }
+    })
   }
 
   return (
@@ -82,12 +117,14 @@ export default function Register() {
             >
               STUFace
             </Text>
-            <Inputs placeholder="Name" isPassword={false} />
-            <Inputs placeholder="E-mail@stuba.sk" isPassword={false} />
-            <Inputs placeholder="Password" isPassword={true} />
-            <Inputs placeholder="Repeat Password" isPassword={true} />
-            <Text>Toggle pre zobrazenie hesiel + fix theme</Text>
-            <Buttons title="Register" onPress={() => {}} />
+            <Inputs placeholder="Name" isPassword={false} value={name} onChangeText={setName} />
+            <Inputs placeholder="Lastname" isPassword={false} value={lastname} onChangeText={setLastname} />
+            <Inputs placeholder="Username" isPassword={false} value={username} onChangeText={setUsername} />
+            <Inputs placeholder="E-mail@stuba.sk" isPassword={false} value={email} onChangeText={setEmail} />
+            <Inputs placeholder="Password" isPassword={true} value={password} onChangeText={setPassword} />
+            <Inputs placeholder="Repeat Password" isPassword={true} value={repeatPassword} onChangeText={setRepeatPassword}/>
+            <Text>Toggle pre zobrazenie hesiel</Text>
+            <Buttons title="Register" onPress={() => register()} />
           </View>
         </ImageBackground>
       </TouchableWithoutFeedback>

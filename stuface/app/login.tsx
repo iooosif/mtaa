@@ -66,11 +66,15 @@ export default function Login() {
     })
     .then((data) => {
       console.log(data);
-      saveLoginData(data)
-      updateUsername(data.username);
-      router.push({
-        pathname: "/home",
-      });
+      if(data.message) {
+        saveLoginData(data)
+        updateUsername(data.username);
+        router.push({
+          pathname: "/home",
+        });
+      } else {
+        Alert.alert("Error", data.error, [{text: "OK"}])
+      }
     })
     .catch((e) => {
       console.log(e);
