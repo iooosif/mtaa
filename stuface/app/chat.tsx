@@ -19,6 +19,7 @@ import ChatPill from '@/components/ChatPill';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { ENV } from '@/utils/env';
 
 // Define types
 interface Conversation {
@@ -46,6 +47,7 @@ export default function ChatScreen() {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false); // Add refreshing state
 
   // Navigate to message screen
   const navigateToMessages = (conversationId: string, displayName: string) => {
@@ -80,10 +82,10 @@ export default function ChatScreen() {
   }, []);
 
   // Fetch conversations function
-  const fetchConversations = async (userId: string) => {
+  const fetchConversations = async (userIdToFetch: string) => {
     try {
       const response = await fetch(
-        `http://localhost:8080/conversations/${userId}`,
+        `http://10.0.2.2:8080/conversations/${userId}`,
       );
       const result = await response.json();
 
@@ -93,9 +95,26 @@ export default function ChatScreen() {
         setConversations(result.data);
       } else {
         console.log('No conversations found or server returned an error');
+        // Set empty array to show "No conversations yet" message
+        setConversations([]);
       }
     } catch (error) {
       console.error('Error fetching conversations:', error);
+      // Set empty array on error
+      setConversations([]);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false); // End refreshing state
+    }
+  };
+
+  // Handle pull-to-refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    if (userId) {
+      fetchConversations(userId);
+    } else {
+      setRefreshing(false);
     }
   };
 
@@ -103,7 +122,7 @@ export default function ChatScreen() {
   const fetchAllUsers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/users');
+      const response = await fetch('http://10.0.2.2:8080/users');
       const result = await response.json();
 
       console.log('Users response:', result);
@@ -171,7 +190,7 @@ export default function ChatScreen() {
       console.log(
         `Creating new conversation between ${userId} and ${selectedUserId}`,
       );
-      const response = await fetch('http://localhost:8080/conversations', {
+      const response = await fetch('http://10.0.2.2:8080/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -385,6 +404,7 @@ const dynamicStyles = (theme: any) =>
     scrollContent: {
       paddingHorizontal: 10,
       paddingBottom: 20,
+      minHeight: '100%', // This ensures pull-to-refresh works when there's not enough content
     },
     emptyText: {
       textAlign: 'center',
@@ -392,6 +412,9 @@ const dynamicStyles = (theme: any) =>
       fontSize: 16,
       color: theme.colors.text,
       opacity: 0.7,
+    },
+    loader: {
+      marginTop: 50,
     },
     // Modal styles
     modalContainer: {
@@ -435,9 +458,6 @@ const dynamicStyles = (theme: any) =>
       flex: 1,
       height: 50,
       color: theme.colors.text,
-    },
-    loader: {
-      marginTop: 50,
     },
     userItem: {
       flexDirection: 'row',

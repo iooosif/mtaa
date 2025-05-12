@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  RefreshControl, // Add this import
 } from 'react-native';
 import { useTheme } from '@/context/ThemeContex';
 import { Stack } from 'expo-router';
@@ -17,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Inputs from '@/components/Inputs';
+import { ENV } from '@/utils/env';
 
 // Define message type
 interface Message {
@@ -37,6 +39,7 @@ export default function MessagesScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const ws = useRef<WebSocket | null>(null);
   const { conversationId, username } = useLocalSearchParams();
+  const [refreshing, setRefreshing] = useState(false); // Add this state
 
   // Load user data on component mount
   useEffect(() => {
@@ -56,13 +59,17 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (!userId || !conversationId) return;
 
+    // Cleanup any existing connection first
+    if (ws.current) {
+      ws.current.close();
+    }
+
     // Connect to WebSocket server with proper URL
-    const wsUrl = `ws://localhost:8080/chat?userId=${userId}`;
+    const wsUrl = `ws://10.0.2.2:8080/chat?userId=${userId}`;
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
       console.log('WebSocket connection established');
-
       // Load previous messages
       fetchMessages();
     };
@@ -73,15 +80,37 @@ export default function MessagesScreen() {
         console.log('Received message:', data);
 
         if (data.type === 'message' && data.conversationId === conversationId) {
-          const newMessage: Message = {
-            id: data.id || Date.now().toString(),
-            text: data.text,
-            sender: data.sender,
-            timestamp: data.timestamp || Date.now(),
-            isMine: data.isMine,
-          };
+          // Check if we already have this message (by server-generated id or client timestamp)
+          // This prevents showing duplicates
+          setMessages((prevMessages) => {
+            // Check if message already exists in our list
+            const messageExists = prevMessages.some(
+              (msg) =>
+                // If server message has an ID, check if we have it
+                (data.id && msg.id === data.id) ||
+                // Or if timestamps match closely (for optimistic updates)
+                (!data.id &&
+                  data.timestamp &&
+                  Math.abs(msg.timestamp - data.timestamp) < 1000 &&
+                  msg.text === data.text &&
+                  msg.sender === data.sender),
+            );
 
-          setMessages((prevMessages) => [...prevMessages, newMessage]);
+            // Only add the message if it doesn't exist
+            if (!messageExists) {
+              const newMessage: Message = {
+                id: data.id || Date.now().toString(),
+                text: data.text,
+                sender: data.sender,
+                timestamp: data.timestamp || Date.now(),
+                isMine: data.sender === userId,
+              };
+
+              return [...prevMessages, newMessage];
+            }
+
+            return prevMessages;
+          });
 
           // Scroll to bottom on new message
           setTimeout(() => {
@@ -105,6 +134,7 @@ export default function MessagesScreen() {
     return () => {
       if (ws.current) {
         ws.current.close();
+        ws.current = null;
       }
     };
   }, [userId, conversationId]);
@@ -115,16 +145,59 @@ export default function MessagesScreen() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/conversations/${conversationId}/messages/${userId}`,
+        `http://10.0.2.2:8080/conversations/${conversationId}/messages/${userId}`,
       );
       const result = await response.json();
 
       if (response.ok && result.data) {
         setMessages(result.data);
+      } else {
+        // Use mock messages if API fails
+        useMockMessages();
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
+      // Use mock messages on error
+      useMockMessages();
+    } finally {
+      // End refreshing state if it was a pull-to-refresh action
+      setRefreshing(false);
     }
+  };
+
+  // Create a function for mock messages
+  const useMockMessages = () => {
+    const mockMessages: Message[] = [
+      {
+        id: '1',
+        text: 'Hey there! How are you?',
+        sender: 'user2',
+        timestamp: Date.now() - 3600000,
+        isMine: false,
+      },
+      {
+        id: '2',
+        text: "I'm good, thanks! How about you?",
+        sender: 'user1',
+        timestamp: Date.now() - 3500000,
+        isMine: true,
+      },
+      {
+        id: '3',
+        text: "I'm doing great! Want to meet up later?",
+        sender: 'user2',
+        timestamp: Date.now() - 3400000,
+        isMine: false,
+      },
+    ];
+
+    setMessages(mockMessages);
+  };
+
+  // Handle refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchMessages();
   };
 
   // Send message function
@@ -132,17 +205,38 @@ export default function MessagesScreen() {
     if (!messageText.trim() || !ws.current || !userId || !conversationId)
       return;
 
+    // Generate a client-side message ID
+    const clientMessageId = Date.now().toString();
+    const timestamp = Date.now();
+
     // Send message through WebSocket
     const messagePayload = {
       type: 'message',
       text: messageText,
       sender: userId,
       conversationId: conversationId,
-      timestamp: Date.now(),
+      timestamp: timestamp,
+      clientMessageId: clientMessageId, // Add this so server can use it
     };
 
     ws.current.send(JSON.stringify(messagePayload));
+
+    // Optimistically add message to UI with its temporary ID
+    const newMessage: Message = {
+      id: clientMessageId,
+      text: messageText,
+      sender: userId,
+      timestamp: timestamp,
+      isMine: true,
+    };
+
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
     setMessageText('');
+
+    // Scroll to bottom
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   // Format timestamp to readable time
@@ -154,31 +248,7 @@ export default function MessagesScreen() {
   // For demo purposes, add some mock messages if none exist
   useEffect(() => {
     if (messages.length === 0) {
-      const mockMessages: Message[] = [
-        {
-          id: '1',
-          text: 'Hey there! How are you?',
-          sender: 'user2',
-          timestamp: Date.now() - 3600000,
-          isMine: false,
-        },
-        {
-          id: '2',
-          text: "I'm good, thanks! How about you?",
-          sender: 'user1',
-          timestamp: Date.now() - 3500000,
-          isMine: true,
-        },
-        {
-          id: '3',
-          text: "I'm doing great! Want to meet up later?",
-          sender: 'user2',
-          timestamp: Date.now() - 3400000,
-          isMine: false,
-        },
-      ];
-
-      setMessages(mockMessages);
+      useMockMessages();
     }
   }, []);
 
@@ -214,6 +284,16 @@ export default function MessagesScreen() {
               contentContainerStyle={styles.messagesList}
               onContentSizeChange={() =>
                 scrollViewRef.current?.scrollToEnd({ animated: true })
+              }
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[theme.colors.primary]}
+                  tintColor={theme.colors.primary}
+                  title="Pull to refresh"
+                  titleColor={theme.colors.text}
+                />
               }
             >
               {messages.map((message) => (

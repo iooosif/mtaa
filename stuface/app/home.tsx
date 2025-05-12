@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { ENV } from '@/utils/env';
 
 interface Topic {
   id: string;
@@ -35,7 +36,7 @@ export default function Home() {
   const fetchTopics = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:8080/topics');
+      const response = await fetch('http://10.0.2.2:8080/topics');
       const result = await response.json();
 
       if (response.ok && result.data) {

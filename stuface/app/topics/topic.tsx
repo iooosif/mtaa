@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   Alert,
+  RefreshControl, // Add this import
 } from 'react-native';
 import { useTheme } from '@/context/ThemeContex';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {ENV} from '@/utils/env';
 
 // Define post type
 interface Post {
@@ -26,7 +28,8 @@ interface Post {
   likes: number;
   comments: number;
   timestamp: string;
-  location?: string; // Add optional location field
+  location?: string;
+  has_image?: boolean;
 }
 
 export default function TopicScreen() {
@@ -41,6 +44,7 @@ export default function TopicScreen() {
     {},
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // Add this state for refresh control
 
   // Load current user's username and ID
   useEffect(() => {
@@ -63,14 +67,17 @@ export default function TopicScreen() {
     fetchPostsForTopic();
   }, [id]);
 
-  const fetchPostsForTopic = async () => {
+  // Use useCallback to memoize the function
+  const fetchPostsForTopic = useCallback(async () => {
     if (!id) return;
 
     try {
-      setIsLoading(true);
+      if (!refreshing) {
+        setIsLoading(true);
+      }
 
       // Fetch posts for the topic
-      const response = await fetch(`http://localhost:8080/topics/${id}/posts`);
+      const response = await fetch(`http://10.0.2.2:8080/topics/${id}/posts`);
       const result = await response.json();
 
       if (response.ok && result.data) {
@@ -86,7 +93,8 @@ export default function TopicScreen() {
               hour: '2-digit',
               minute: '2-digit',
             }),
-            location: post.location || undefined, // Map the location field
+            location: post.location || undefined,
+            has_image: post.has_image || false,
           };
         });
 
@@ -101,8 +109,9 @@ export default function TopicScreen() {
       useFallbackPosts();
     } finally {
       setIsLoading(false);
+      setRefreshing(false); // Reset refreshing state when done
     }
-  };
+  }, [id, refreshing]);
 
   // Fallback posts when API fails
   const useFallbackPosts = () => {
@@ -121,8 +130,14 @@ export default function TopicScreen() {
     ]);
   };
 
+  // Add onRefresh handler for pull-to-refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchPostsForTopic();
+  }, [fetchPostsForTopic]);
+
   const handleLikePress = async (postId: string) => {
-    if (!currentUsername || !userId) return; // Don't allow liking if user data isn't loaded
+    if (!currentUsername || !userId) return;
 
     try {
       // Determine if the user is liking or unliking
@@ -149,14 +164,10 @@ export default function TopicScreen() {
       );
 
       // Update vote on server
-      const response = await fetch(
-        `http://localhost:8080/post/${postId}/vote`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ vote: voteValue }),
+      const response = await fetch(`http://10.0.2.2:8080/post/${postId}/vote`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
         },
       );
 
@@ -186,11 +197,62 @@ export default function TopicScreen() {
     }
   };
 
-  const handleCommentPress = (postId: string, username: string) => {
+  const handleCommentPress = (postId: string, username: string, hasImage: boolean, location?: string) => {
     router.push({
       pathname: '/topics/comments',
-      params: { postId, username },
+      params: {
+        postId,
+        username,
+        hasImage: hasImage ? 'true' : 'false',
+        location: location || ''
+      },
     });
+  };
+
+  // Function to handle post deletion
+  const handleDeletePost = async (postId: string) => {
+    if (!userId) return;
+
+    // Show confirmation dialog first
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to delete this post? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Show loading state
+              setIsLoading(true);
+
+              // Call the API to delete the post
+              const response = await fetch(`${ENV.API_URL}/post/${postId}`, {
+                method: 'DELETE',
+              });
+
+              if (response.ok) {
+                // Remove the post from local state
+                setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+                Alert.alert("Success", "Post deleted successfully");
+              } else {
+                const errorData = await response.json();
+                Alert.alert("Error", errorData.error || "Failed to delete post");
+              }
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Alert.alert("Error", "Failed to delete post. Please try again.");
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -218,7 +280,19 @@ export default function TopicScreen() {
               <Text style={styles.loadingText}>Loading posts...</Text>
             </View>
           ) : (
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[theme.colors.primary]}
+                  tintColor={theme.colors.primary}
+                  title="Pull to refresh"
+                  titleColor={theme.colors.text}
+                />
+              }
+            >
               {posts.length > 0 ? (
                 posts.map((post) => (
                   <View key={post.id} style={styles.postCard}>
@@ -230,9 +304,29 @@ export default function TopicScreen() {
                         style={styles.airplaneIcon}
                       />
                       <Text style={styles.username}>{post.username}</Text>
+
+                      {/* Delete button - only visible for the current user's posts */}
+                      {post.username === currentUsername && (
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={() => handleDeletePost(post.id)}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                     <View style={styles.bodyContainer}>
                       <Text style={styles.body}>{post.body}</Text>
+
+                      {post.has_image && (
+                        <View style={styles.postImageContainer}>
+                          <Image
+                            source={{ uri: `${ENV.API_URL}/posts/${post.id}/image` }}
+                            style={styles.postImage}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      )}
 
                       {post.location && (
                         <View style={styles.locationContainer}>
@@ -259,9 +353,7 @@ export default function TopicScreen() {
                           </View>
                         </TouchableWithoutFeedback>
                         <TouchableWithoutFeedback
-                          onPress={() =>
-                            handleCommentPress(post.id, post.username)
-                          }
+                          onPress={() => handleCommentPress(post.id, post.username)}
                         >
                           <View style={styles.statItem}>
                             <Image
@@ -286,6 +378,7 @@ export default function TopicScreen() {
   );
 }
 
+// Your existing styles remain unchanged
 const dynamicStyles = (theme: any) =>
   StyleSheet.create({
     background: {
@@ -326,6 +419,8 @@ const dynamicStyles = (theme: any) =>
     },
     scrollContent: {
       padding: 15,
+      marginTop: 15,
+      bottom: 30,
     },
     postCard: {
       marginBottom: 15,
@@ -404,5 +499,18 @@ const dynamicStyles = (theme: any) =>
       color: '#0066FF',
       marginLeft: 4,
       fontStyle: 'italic',
+    },
+    postImageContainer: {
+      marginTop: 10,
+      marginBottom: 10,
+    },
+    postImage: {
+      width: '100%',
+      height: 200,
+      borderRadius: 10,
+    },
+    deleteButton: {
+      marginLeft: 'auto',
+      padding: 5,
     },
   });

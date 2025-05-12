@@ -10,7 +10,8 @@ const cors = require('cors');
 
 // Initialize Express app
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
 // Create a database connection
@@ -612,6 +613,60 @@ setTimeout(() => {
   alterCommentsTable();
 }, 4000); // Run this after createTables which runs at 3000ms
 
+// Add after the alterCommentsTable function
+
+function addCascadeDeleteConstraints() {
+  pool
+    .query(
+      `
+    -- First, drop the existing constraint
+    ALTER TABLE comments
+    DROP CONSTRAINT IF EXISTS comments_post_id_fkey;
+
+    -- Then add the new constraint with CASCADE DELETE
+    ALTER TABLE comments
+    ADD CONSTRAINT comments_post_id_fkey
+    FOREIGN KEY (post_id)
+    REFERENCES posts(id)
+    ON DELETE CASCADE;
+  `,
+    )
+    .then(() => {
+      console.log('Added CASCADE DELETE constraint to comments table');
+    })
+    .catch((err) => {
+      console.error('Error modifying comments table constraints:', err);
+    });
+
+  // Also add CASCADE DELETE to replies table if needed
+  pool
+    .query(
+      `
+    -- First, drop the existing constraint
+    ALTER TABLE replies
+    DROP CONSTRAINT IF EXISTS replies_comment_id_fkey;
+
+    -- Then add the new constraint with CASCADE DELETE
+    ALTER TABLE replies
+    ADD CONSTRAINT replies_comment_id_fkey
+    FOREIGN KEY (comment_id)
+    REFERENCES comments(id)
+    ON DELETE CASCADE;
+  `,
+    )
+    .then(() => {
+      console.log('Added CASCADE DELETE constraint to replies table');
+    })
+    .catch((err) => {
+      console.error('Error modifying replies table constraints:', err);
+    });
+}
+
+// Call this function after alterCommentsTable
+setTimeout(() => {
+  addCascadeDeleteConstraints();
+}, 5000); // Run this after other table alterations
+
 //file upload
 //Method: POST
 // URL: http://localhost:8080/upload
@@ -694,6 +749,39 @@ app.get('/upload/:id', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+app.post('/change-password', async (req, res) => {
+  const { user_id, current_password, new_password } = req.body;
+
+  try {
+    const user = await pool.query('SELECT * FROM users WHERE id = $1', [
+      user_id,
+    ]);
+    if (user.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'User not found' });
+    }
+
+    if (user.rows[0].password !== current_password) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Incorrect current password' });
+    }
+
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [
+      new_password,
+      user_id,
+    ]);
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    return res
+      .status(500)
+      .json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // Download file by ID
 //Method: GET
 // URL: http://localhost:8080/download/1 (replace 1 with the file ID).
@@ -1065,7 +1153,8 @@ app.get('/topics/:id/posts', async (req, res) => {
         p.location,
         p.created_at,
         u.username,
-        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count
+        (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count,
+        CASE WHEN p.image_data IS NOT NULL THEN true ELSE false END as has_image
       FROM posts p
       JOIN users u ON p.user_id = u.id
       WHERE p.topic_id = $1
@@ -1138,7 +1227,7 @@ app.post('/post', async (req, res) => {
 });
 
 /**
- * @description Create a new post
+ * @description Create a new post with a base64 encoded image
  * @returns The newly created post
  */
 app.post('/posts', async (req, res) => {
@@ -1167,21 +1256,26 @@ app.post('/posts', async (req, res) => {
       return res.status(404).json({ error: 'Topic not found' });
     }
 
-    // Create the post
     let result;
-    if (location) {
-      // Insert with location
+
+    // Check if an image was provided
+    if (image_data) {
+      // Convert base64 to binary buffer
+      const imageBuffer = Buffer.from(image_data, 'base64');
+      console.log(`Received image of size ${imageBuffer.length} bytes`);
+
+      // Store the image binary data in the database
       result = await pool.query(
-        `INSERT INTO posts (user_id, topic_id, content, location)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO posts (user_id, topic_id, content, location, image_data)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id, content, created_at`,
         [user_id, topic_id, content, location],
       );
     } else {
-      // Insert without location
+      // No image uploaded
       result = await pool.query(
-        `INSERT INTO posts (user_id, topic_id, content)
-         VALUES ($1, $2, $3)
+        `INSERT INTO posts (user_id, topic_id, content, location)
+         VALUES ($1, $2, $3, $4)
          RETURNING id, content, created_at`,
         [user_id, topic_id, content],
       );
@@ -1212,6 +1306,32 @@ app.get('/posts', async (req, res) => {
   } catch (e) {
     console.error('Something went wrong when loading posts...', e);
     return res.status(500).json({ error: 'Internal server error!' });
+  }
+});
+
+/**
+ * @description Get image data for a post
+ * @returns Binary image data
+ */
+app.get('/posts/:id/image', async (req, res) => {
+  const postId = req.params.id;
+
+  try {
+    const result = await pool.query(
+      'SELECT image_data FROM posts WHERE id = $1 AND image_data IS NOT NULL',
+      [postId],
+    );
+
+    if (result.rows.length === 0 || !result.rows[0].image_data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Set appropriate content type and return the binary data
+    res.set('Content-Type', 'image/jpeg');
+    res.send(result.rows[0].image_data);
+  } catch (e) {
+    console.error('Error fetching image:', e);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

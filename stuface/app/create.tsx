@@ -13,6 +13,7 @@ import {
   Modal,
   Image,
   StatusBar,
+  ActionSheetIOS,
 } from 'react-native';
 
 import Inputs from '@/components/Inputs';
@@ -24,6 +25,8 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ENV } from '@/utils/env';
+import * as FileSystem from 'expo-file-system';
 
 import { useTheme } from '@/context/ThemeContex';
 
@@ -53,6 +56,9 @@ export default function CreateScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Add this state for iOS picker
+  const [selectedTopicName, setSelectedTopicName] = useState('Select a topic');
+
   // Get user ID on component mount
   useEffect(() => {
     const getUserId = async () => {
@@ -68,10 +74,22 @@ export default function CreateScreen() {
     fetchTopics();
   }, []);
 
+  // Add this effect to update the topic name when ID changes
+  useEffect(() => {
+    if (selectedTopicId && topics.length > 0) {
+      const selectedTopic = topics.find(
+        (t) => t.id.toString() === selectedTopicId,
+      );
+      if (selectedTopic) {
+        setSelectedTopicName(selectedTopic.name);
+      }
+    }
+  }, [selectedTopicId, topics]);
+
   // Function to fetch topics from the backend
   const fetchTopics = async () => {
     try {
-      const response = await fetch('http://localhost:8080/topics');
+      const response = await fetch('http://10.0.2.2:8080/topics');
       const result = await response.json();
 
       if (response.ok && result.data) {
@@ -110,19 +128,48 @@ export default function CreateScreen() {
     setIsSubmitting(true);
 
     try {
-      // Prepare post data
-      const postData = {
+      // Base post data
+      let postData: any = {
         user_id: userId,
         topic_id: selectedTopicId,
         content: postText,
         location: placeName || null,
-        // Handle image separately if needed
       };
 
-      console.log('Submitting post data:', postData);
+      // If we have an image, convert it to base64
+      if (capturedImage) {
+        try {
+          console.log('Converting image to base64:', capturedImage);
+
+          // Read the file as base64
+          const base64Image = await FileSystem.readAsStringAsync(
+            capturedImage,
+            {
+              encoding: FileSystem.EncodingType.Base64,
+            },
+          );
+
+          // Add the base64 image to the post data
+          postData.image_data = base64Image;
+
+          console.log('Image converted to base64 successfully');
+        } catch (error) {
+          console.error('Error converting image to base64:', error);
+          Alert.alert(
+            'Error',
+            'Failed to process the image. Please try again.',
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      console.log(
+        'Submitting post data with' + (capturedImage ? ' image' : 'out image'),
+      );
 
       // Send post data to server
-      const response = await fetch('http://localhost:8080/posts', {
+      const response = await fetch('http://10.0.2.2:8080/posts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -201,9 +248,8 @@ export default function CreateScreen() {
     setCameraVisible(true);
   };
 
-  // Handle gallery icon press - pick image from gallery
+  // Update your handleGalleryPress function
   const handleGalleryPress = async () => {
-    // Запрашиваем разрешение на доступ к галерее
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -215,17 +261,16 @@ export default function CreateScreen() {
       return;
     }
 
-    // Открываем галерею для выбора фото
+    // Open gallery with quality set to 0.5 (50%)
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1,
+      quality: 0.5, // Set lower quality (0-1)
     });
 
     if (!result.canceled) {
       setCapturedImage(result.assets[0].uri);
-      console.log('Image selected from gallery:', result.assets[0].uri);
     }
   };
 
@@ -234,18 +279,19 @@ export default function CreateScreen() {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
   };
 
-  // Capture photo
+  // Also update your camera code to use lower quality
   const takePicture = async () => {
     try {
       if (cameraRef.current) {
-        const photo = await cameraRef.current.takePictureAsync();
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.5, // Lower quality
+          skipProcessing: false, // Allow processing for better compression
+        });
         setCapturedImage(photo.uri);
-        console.log('Photo taken:', photo.uri);
         setCameraVisible(false);
       }
     } catch (error) {
       console.error('Failed to take picture:', error);
-      Alert.alert('Error', 'Failed to capture image. Please try again.');
     }
   };
 
@@ -339,27 +385,71 @@ export default function CreateScreen() {
             {/* Category Selection */}
             <View style={styles.pickerContainer}>
               <Text style={styles.pickerLabel}>Select Topic:</Text>
-              <View style={styles.pickerWrapper}>
-                {topics.length > 0 ? (
-                  <Picker
-                    selectedValue={selectedTopicId}
-                    onValueChange={(itemValue) => setSelectedTopicId(itemValue)}
-                    style={styles.picker}
-                    dropdownIconColor={theme.colors.text}
-                  >
-                    {topics.map((topic) => (
-                      <Picker.Item
-                        key={topic.id}
-                        label={topic.name}
-                        value={topic.id.toString()}
-                        color={theme.colors.text}
-                      />
-                    ))}
-                  </Picker>
-                ) : (
-                  <Text style={styles.loadingText}>Loading topics...</Text>
-                )}
-              </View>
+
+              {Platform.OS === 'ios' ? (
+                // iOS-specific implementation
+                <TouchableOpacity
+                  style={styles.iosPickerButton}
+                  onPress={() => {
+                    if (topics.length > 0) {
+                      // Create options for ActionSheet
+                      const options = topics.map((topic) => topic.name);
+                      options.push('Cancel');
+
+                      ActionSheetIOS.showActionSheetWithOptions(
+                        {
+                          options,
+                          cancelButtonIndex: options.length - 1,
+                          title: 'Select a Topic',
+                        },
+                        (buttonIndex) => {
+                          if (buttonIndex !== options.length - 1) {
+                            // Not cancel
+                            setSelectedTopicId(
+                              topics[buttonIndex].id.toString(),
+                            );
+                            setSelectedTopicName(topics[buttonIndex].name);
+                          }
+                        },
+                      );
+                    }
+                  }}
+                >
+                  <Text style={styles.iosPickerButtonText}>
+                    {selectedTopicName}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={18}
+                    color={theme.colors.text}
+                  />
+                </TouchableOpacity>
+              ) : (
+                // Android implementation (unchanged)
+                <View style={styles.pickerWrapper}>
+                  {topics.length > 0 ? (
+                    <Picker
+                      selectedValue={selectedTopicId}
+                      onValueChange={(itemValue) =>
+                        setSelectedTopicId(itemValue)
+                      }
+                      style={styles.picker}
+                      dropdownIconColor={theme.colors.text}
+                    >
+                      {topics.map((topic) => (
+                        <Picker.Item
+                          key={topic.id}
+                          label={topic.name}
+                          value={topic.id.toString()}
+                          color={theme.colors.text}
+                        />
+                      ))}
+                    </Picker>
+                  ) : (
+                    <Text style={styles.loadingText}>Loading topics...</Text>
+                  )}
+                </View>
+              )}
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -465,7 +555,7 @@ const dynamicStyles = (theme: any) =>
       borderColor: theme.colors.border || '#ccc',
       borderRadius: 8,
       overflow: 'hidden',
-      backgroundColor: theme.colors.card || '#f9f9f9',
+      backgroundColor: theme.colors.primary || '#f9f9f9',
     },
     picker: {
       width: '100%',
@@ -533,5 +623,18 @@ const dynamicStyles = (theme: any) =>
       backgroundColor: 'rgba(0,0,0,0.5)',
       borderRadius: 15,
       padding: 5,
+    },
+    iosPickerButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 15,
+      borderWidth: 1,
+      borderColor: theme.colors.border || '#ccc',
+      borderRadius: 8,
+      backgroundColor: theme.colors.primary || '#f9f9f9',
+    },
+    iosPickerButtonText: {
+      color: theme.colors.text,
     },
   });
